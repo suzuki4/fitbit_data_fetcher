@@ -118,7 +118,7 @@ def update_token(d_token):
     
     df = pd.read_csv('../data/master.csv', index_col='ind')
     
-    cond = (d_token['refresh_token'] == df['refresh_token'])
+    cond = (d_token['user_id'] == df['user_id'])
     if sum(cond) != 1:
         raise Exception(f'Cannot update refresh_token: {str(d_token)}')
     
@@ -129,7 +129,7 @@ def update_token(d_token):
     
     df.to_csv('../data/master.csv')
     
-    logger.info(f"Updated access_token of user_id: {df.loc[cond, 'user_id'].values[0]}, updated_cnt: df.loc[cond, 'updated_cnt'].values[0]")
+    logger.info(f"Updated access_token of user_id: {df.loc[cond, 'user_id'].values[0]}, updated_cnt: {df.loc[cond, 'updated_cnt'].values[0]}")
     
 
 def create_initial_dirs(user_id):
@@ -217,3 +217,11 @@ if __name__ == '__main__':
     config.read('../conf/config.ini')
     slack = Slacker(config.get("slack", "token"))
     main()
+    
+    
+response = fb.intraday_time_series('activities/heart', base_date=date, detail_level='1sec')
+response = fb.intraday_time_series('activities/heart', base_date=date, detail_level='1sec')
+
+
+
+
