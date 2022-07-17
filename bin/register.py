@@ -28,8 +28,6 @@ def dump_master_data(d):
                                    'user_id',
                                    'start_date',
                                    'end_date',
-                                   'fetch_start_date',
-                                   'fetch_end_date',
                                    'access_token',
                                    'refresh_token',
                                    'expires_in',
@@ -52,11 +50,10 @@ def dump_master_data(d):
         
     else:
         dt_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        date_str = dt_str[:10]
         insert_row = [d['user_id'],
-                      '2022-06-01', #TODO
-                      '2024-12-31', #TODO
-                      '2022-06-01', #TODO
-                      '2024-12-31', #TODO
+                      date_str,
+                      '2099-12-31',
                       d['access_token'],
                       d['refresh_token'],
                       d['expires_in'],

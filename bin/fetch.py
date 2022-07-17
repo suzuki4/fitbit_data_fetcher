@@ -18,9 +18,9 @@ def notify_slack(start=True, channel=None, as_user=True):
     def _notify_slack(func):         
         def wrapper(*arg, **kwargs):
             if start:
-                slack_msg(f'Start fetch.py', channel=channel, as_user=as_user)
+                slack_msg('Start fetch.py', channel=channel, as_user=as_user)
             ret = func(*arg, **kwargs)
-            slack_msg(f'End fetch.py', channel=channel, as_user=as_user)
+            slack_msg('End fetch.py', channel=channel, as_user=as_user)
             return ret
         return wrapper
     return _notify_slack
@@ -90,12 +90,12 @@ def get_dates_for_fetch(dir_path, user_id):
     
     present_dt = datetime.datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
 
-    fetch_start_dt = datetime.datetime.strptime(df.loc[cond, 'fetch_start_date'].values[0], '%Y-%m-%d')
+    start_dt = datetime.datetime.strptime(df.loc[cond, 'start_date'].values[0], '%Y-%m-%d')
     if latest_file_date is None:
-        dt = fetch_start_dt
+        dt = start_dt
     else:
         latest_file_dt = datetime.datetime.strptime(latest_file_date, '%Y-%m-%d')
-        dt = max(latest_file_dt, fetch_start_dt)
+        dt = max(latest_file_dt, start_dt)
     
     dates = []
     while dt < present_dt:
@@ -205,7 +205,7 @@ def main():
     df = pd.read_csv('../data/master.csv', index_col='ind')
     for i, r in df.iterrows():
         
-        if r['delete_flg'] == 1 or not (r['fetch_start_date'] <= datetime.datetime.today().strftime('%Y-%m-%d') <= r['fetch_end_date']):
+        if r['delete_flg'] == 1 or not (r['start_date'] <= datetime.datetime.today().strftime('%Y-%m-%d') <= r['end_date']):
             logger.info(f"Skip update data of user_id: {r['user_id']}")
             continue
         
@@ -219,9 +219,9 @@ if __name__ == '__main__':
     main()
     
     
-response = fb.intraday_time_series('activities/heart', base_date=date, detail_level='1sec')
-response = fb.intraday_time_series('activities/heart', base_date=date, detail_level='1sec')
+# response = fb.intraday_time_series('hrv', base_date="2022-07-01", detail_level='1sec')
+# response = fb.intraday_time_series('activities/heart', base_date=date, detail_level='1sec')
 
-
+# fb.user_profile_get()
 
 
