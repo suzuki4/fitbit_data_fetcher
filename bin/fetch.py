@@ -13,6 +13,49 @@ logging.config.fileConfig("../conf/logging.ini")
 logger = logging.getLogger(__name__)
 
 
+class ExFitbit(fitbit.Fitbit):
+    
+    US = 'en_US'
+    
+    def __init__(self, client_id, client_secret, access_token=None,
+            refresh_token=None, expires_at=None, refresh_cb=None,
+            redirect_uri=None, system=US, **kwargs):
+        super().__init__(client_id, client_secret, access_token,
+                refresh_token, expires_at, refresh_cb,
+                redirect_uri, system, **kwargs)
+        
+    # def intraday_time_series(self, user_id, resource, base_date='today', detail_level='1min', start_time=None, end_time=None):
+
+    #     # Check that the time range is valid
+    #     time_test = lambda t: not (t is None or isinstance(t, str) and not t)
+    #     time_map = list(map(time_test, [start_time, end_time]))
+    #     if not all(time_map) and any(time_map):
+    #         raise TypeError('You must provide both the end and start time or neither')
+
+    #     if not detail_level in ['1sec', '1min', '15min']:
+    #         raise ValueError("Period must be either '1sec', '1min', or '15min'")
+
+    #     url = "{0}/{1}/user/{user_id}/{resource}/date/{base_date}/1d/{detail_level}".format(
+    #         *self._get_common_args(),
+    #         user_id=user_id,
+    #         resource=resource,
+    #         base_date=self._get_date_string(base_date),
+    #         detail_level=detail_level
+    #     )
+
+    #     if all(time_map):
+    #         url = url + '/time'
+    #         for time in [start_time, end_time]:
+    #             time_str = time
+    #             if not isinstance(time_str, str):
+    #                 time_str = time.strftime('%H:%M')
+    #             url = url + ('/%s' % (time_str))
+
+    #     url = url + '.json'
+
+    #     return self.make_request(url)
+
+    
 def notify_slack(start=True, channel=None, as_user=True):
     
     def _notify_slack(func):         
@@ -103,12 +146,13 @@ def get_dates_for_fetch(dir_path, user_id):
         dates.append(dt.strftime('%Y-%m-%d'))
         dt += datetime.timedelta(days=1)
 
-    latest_dt_when_sync_every_day = present_dt - datetime.timedelta(days=2)
-    no_sync_days = (latest_dt_when_sync_every_day - datetime.datetime.strptime(dates[0], '%Y-%m-%d')).days
-    if no_sync_days >= config.getint('fitbit', 'warn_no_sync_days'):
-        msg = f"user_id: {user_id} has to be sync from {dates[0]} of {dir_path.split('/')[-1]}. No sync time is too long."
-        logger.warn(msg)
-        slack_warning(msg)
+    if len(dates) > 0:
+        latest_dt_when_sync_every_day = present_dt - datetime.timedelta(days=2)
+        no_sync_days = (latest_dt_when_sync_every_day - datetime.datetime.strptime(dates[0], '%Y-%m-%d')).days
+        if no_sync_days >= config.getint('fitbit', 'warn_no_sync_days'):
+            msg = f"user_id: {user_id} has to be sync from {dates[0]} of {dir_path.split('/')[-1]}. No sync time is too long."
+            logger.warn(msg)
+            slack_warning(msg)
 
     return dates
     
@@ -143,11 +187,11 @@ def create_initial_dirs(user_id):
 
 
 def get_fitbit_client(access_token, refresh_token):
-    return fitbit.Fitbit(config.get('fitbit', 'client_id'),
-                         config.get('fitbit', 'client_secret'),
-                         access_token=access_token,
-                         refresh_token=refresh_token,
-                         refresh_cb=update_token)
+    return ExFitbit(config.get('fitbit', 'client_id'),
+                    config.get('fitbit', 'client_secret'),
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    refresh_cb=update_token)
 
 
 def _update_heart_rate(fb, user_id):
@@ -155,32 +199,42 @@ def _update_heart_rate(fb, user_id):
     logger.info(f"Start update heart-intraday data of user_id: {user_id}")
     
     if not os.path.exists(f"../data/{user_id}/2_preprocessed/heart-intraday.csv"):
-        df_total = pd.DataFrame(columns=['datetime','value']).set_index('datetime')
+        df_present = pd.DataFrame(columns=['datetime','value']).set_index('datetime')
     else:
-        df_total = pd.read_csv(f"../data/{user_id}/2_preprocessed/heart-intraday.csv", index_col='datetime')
+        df_present = pd.read_csv(f"../data/{user_id}/2_preprocessed/heart-intraday.csv", index_col='datetime')
     
     dates = get_dates_for_fetch(f"../data/{user_id}/1_raw/heart-intraday", user_id)
+    dfs = []
     for date in dates:
         
         response = fb.intraday_time_series('activities/heart', base_date=date, detail_level='1sec')
         logger.info(f"Fetched heart-intraday in {date} of user_id: {user_id}")
-        df = pd.DataFrame(response['activities-heart-intraday']['dataset'])
-        if len(df) == 0:
+        df_raw = pd.DataFrame(response['activities-heart-intraday']['dataset'])
+        if len(df_raw) == 0:
             msg = f"Missing heart-intraday in {date} of user_id: {user_id}"
             logger.warn(msg)
             slack_warning(msg)
             continue
-        df.to_csv(f"../data/{user_id}/1_raw/heart-intraday/1_raw_heart-intraday_{date.replace('-','')}_{user_id}.csv")
+        df_raw.to_csv(f"../data/{user_id}/1_raw/heart-intraday/1_raw_heart-intraday_{date.replace('-','')}_{user_id}.csv")
         
+        df = df_raw
         df['datetime'] = date + ' ' + df['time']
-        df = df[['datetime','value']].set_index('datetime')
-        df_total = df_total[df_total.index.str[:10] != date]
-        df_total = df_total.append(df).sort_index()
+        df = df_raw[['datetime','value']].set_index('datetime')
+        dfs.append(df)
     
-    df_total.to_csv(f"../data/{user_id}/2_preprocessed/heart-intraday.csv")
+    if len(dfs) > 0:
+        df_add = pd.concat(dfs)
+        df_base = df_present[[d not in dates for d in df_present.index.str[:10]]]
+        df_new = pd.concat([df_base, df_add])
+        
+        df_new.to_csv(f"../data/{user_id}/2_preprocessed/heart-intraday.csv")
+    
+    else:
+        logger.info(f"Nothing to update heart-intraday data of user_id: {user_id}")
+        
         
     logger.info(f"End update heart-intraday data of user_id: {user_id}")
-    
+
 
 @handle_error(_continue=True)
 def update_data(user_id, access_token, refresh_token):
@@ -218,10 +272,11 @@ if __name__ == '__main__':
     slack = Slacker(config.get("slack", "token"))
     main()
     
-    
+
 # response = fb.intraday_time_series('hrv', base_date="2022-07-01", detail_level='1sec')
 # response = fb.intraday_time_series('activities/heart', base_date=date, detail_level='1sec')
 
 # fb.user_profile_get()
 
+# fb.client_secret
 
