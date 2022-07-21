@@ -167,6 +167,7 @@ def update_token(d_token):
         raise Exception(f'Cannot update refresh_token: {str(d_token)}')
     
     df.loc[cond, 'access_token'] = d_token['access_token']
+    df.loc[cond, 'refresh_token'] = d_token['refresh_token']
     df.loc[cond, 'expires_in'] = d_token['expires_in']
     df.loc[cond, 'updated_at'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     df.loc[cond, 'updated_cnt'] += 1
