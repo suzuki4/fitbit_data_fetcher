@@ -151,7 +151,7 @@ def get_dates_for_fetch(dir_path, user_id):
         no_sync_days = (latest_dt_when_sync_every_day - datetime.datetime.strptime(dates[0], '%Y-%m-%d')).days
         if no_sync_days >= config.getint('fitbit', 'warn_no_sync_days'):
             msg = f"user_id: {user_id} has to be sync from {dates[0]} of {dir_path.split('/')[-1]}. No sync time is too long."
-            logger.warn(msg)
+            logger.warning(msg)
             slack_warning(msg)
 
     return dates
@@ -213,7 +213,7 @@ def _update_heart_rate(fb, user_id):
         df_raw = pd.DataFrame(response['activities-heart-intraday']['dataset'])
         if len(df_raw) == 0:
             msg = f"Missing heart-intraday in {date} of user_id: {user_id}"
-            logger.warn(msg)
+            logger.warning(msg)
             slack_warning(msg)
             continue
         df_raw.to_csv(f"../data/{user_id}/1_raw/heart-intraday/1_raw_heart-intraday_{date.replace('-','')}_{user_id}.csv")
