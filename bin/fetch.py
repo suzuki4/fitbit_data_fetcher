@@ -24,36 +24,33 @@ class ExFitbit(fitbit.Fitbit):
                 refresh_token, expires_at, refresh_cb,
                 redirect_uri, system, **kwargs)
         
-    # def intraday_time_series(self, user_id, resource, base_date='today', detail_level='1min', start_time=None, end_time=None):
 
-    #     # Check that the time range is valid
-    #     time_test = lambda t: not (t is None or isinstance(t, str) and not t)
-    #     time_map = list(map(time_test, [start_time, end_time]))
-    #     if not all(time_map) and any(time_map):
-    #         raise TypeError('You must provide both the end and start time or neither')
+    def intraday_time_series_all(self, resource, base_date='today', start_time=None, end_time=None):
 
-    #     if not detail_level in ['1sec', '1min', '15min']:
-    #         raise ValueError("Period must be either '1sec', '1min', or '15min'")
+        # Check that the time range is valid
+        time_test = lambda t: not (t is None or isinstance(t, str) and not t)
+        time_map = list(map(time_test, [start_time, end_time]))
+        if not all(time_map) and any(time_map):
+            raise TypeError('You must provide both the end and start time or neither')
 
-    #     url = "{0}/{1}/user/{user_id}/{resource}/date/{base_date}/1d/{detail_level}".format(
-    #         *self._get_common_args(),
-    #         user_id=user_id,
-    #         resource=resource,
-    #         base_date=self._get_date_string(base_date),
-    #         detail_level=detail_level
-    #     )
+        url = "{0}/{1}/user/-/{resource}/date/{base_date}/all".format(
+            *self._get_common_args(),
+            resource=resource,
+            base_date=self._get_date_string(base_date),
+        )
 
-    #     if all(time_map):
-    #         url = url + '/time'
-    #         for time in [start_time, end_time]:
-    #             time_str = time
-    #             if not isinstance(time_str, str):
-    #                 time_str = time.strftime('%H:%M')
-    #             url = url + ('/%s' % (time_str))
+        if all(time_map):
+            url = url + '/time'
+            for time in [start_time, end_time]:
+                time_str = time
+                if not isinstance(time_str, str):
+                    time_str = time.strftime('%H:%M')
+                url = url + ('/%s' % (time_str))
 
-    #     url = url + '.json'
+        url = url + '.json'
 
-    #     return self.make_request(url)
+        return self.make_request(url)
+
 
     
 def notify_slack(start=True, channel=None, as_user=True):
@@ -181,10 +178,11 @@ def create_initial_dirs(user_id):
     
     if not os.path.exists(f"../data/{user_id}"):
         os.makedirs(f"../data/{user_id}/1_raw/heart-intraday")
+        os.makedirs(f"../data/{user_id}/1_raw/hrv")
         os.makedirs(f"../data/{user_id}/2_preprocessed")
         os.makedirs(f"../data/{user_id}/3_processed")
     
-    logger.info(f"Initialized dirs of user_id: {user_id}")    
+        logger.info(f"Initialized dirs of user_id: {user_id}")    
 
 
 def get_fitbit_client(access_token, refresh_token):
@@ -232,9 +230,54 @@ def _update_heart_rate(fb, user_id):
     
     else:
         logger.info(f"Nothing to update heart-intraday data of user_id: {user_id}")
-        
-        
+
+
     logger.info(f"End update heart-intraday data of user_id: {user_id}")
+
+
+def _update_hrv(fb, user_id):
+    
+    logger.info(f"Start update hrv data of user_id: {user_id}")
+    
+    if not os.path.exists(f"../data/{user_id}/2_preprocessed/hrv.csv"):
+        df_present = pd.DataFrame(columns=['datetime','rmssd','coverage','hf','lf']).set_index('datetime')
+    else:
+        df_present = pd.read_csv(f"../data/{user_id}/2_preprocessed/hrv.csv", index_col='datetime')
+    
+    dates = get_dates_for_fetch(f"../data/{user_id}/1_raw/hrv", user_id)
+    dfs = []
+    for date in dates:
+        
+        response = fb.intraday_time_series_all('hrv', base_date=date)
+        logger.info(f"Fetched hrv in {date} of user_id: {user_id}")
+        
+        hrv_list = response['hrv']
+        if len(hrv_list) == 0:
+            msg = f"Missing hrv in {date} of user_id: {user_id}"
+            logger.warning(msg)
+            slack_warning(msg)
+            continue
+        df_raw = pd.DataFrame(hrv_list[0]['minutes'])
+        df_raw.to_csv(f"../data/{user_id}/1_raw/hrv/1_raw_heart-intraday_{date.replace('-','')}_{user_id}.csv")
+        
+        df = pd.DataFrame(df_raw['value'].tolist())
+        df['datetime'] = pd.to_datetime(df_raw['minute'].values)
+        df.set_index('datetime', inplace=True)
+
+        dfs.append(df)
+    
+    if len(dfs) > 0:
+        df_add = pd.concat(dfs)
+        df_base = df_present[[d not in dates for d in df_present.index.str[:10]]]
+        df_new = pd.concat([df_base, df_add])
+        
+        df_new.to_csv(f"../data/{user_id}/2_preprocessed/hrv.csv")
+    
+    else:
+        logger.info(f"Nothing to update hrv data of user_id: {user_id}")
+
+
+    logger.info(f"End update hrv data of user_id: {user_id}")
 
 
 @handle_error(_continue=True)
@@ -248,6 +291,7 @@ def update_data(user_id, access_token, refresh_token):
     fb = get_fitbit_client(access_token, refresh_token)
     create_initial_dirs(user_id)
     _update_heart_rate(fb, user_id)
+    _update_hrv(fb, user_id)
     
     logger.info(f"End update data of user_id: {user_id}")
         
@@ -274,7 +318,7 @@ if __name__ == '__main__':
     main()
     
 
-# response = fb.intraday_time_series('hrv', base_date="2022-07-01", detail_level='1sec')
+# response = fb.intraday_time_series_all('hrv', base_date="2022-07-01")
 # response = fb.intraday_time_series('activities/heart', base_date=date, detail_level='1sec')
 
 # fb.user_profile_get()
