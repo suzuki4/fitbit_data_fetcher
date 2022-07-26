@@ -245,8 +245,9 @@ def _update_heart_rate(fb, user_id):
     dfs = []
     for file in sorted(os.listdir(f"../data/{user_id}/2_preprocessed/heart-intraday")):        
         dfs.append(pd.read_csv(f"../data/{user_id}/2_preprocessed/heart-intraday/{file}", index_col=0))
-    df = pd.concat(dfs)
-    df.to_csv(f"../data/{user_id}/3_processed/3_processed_heart-intraday_{user_id}.csv")
+    if len(dfs) > 0:
+        df = pd.concat(dfs)
+        df.to_csv(f"../data/{user_id}/3_processed/3_processed_heart-intraday_{user_id}.csv")
     
     logger.info(f"End update heart-intraday data of user_id: {user_id}")
 
@@ -285,8 +286,9 @@ def _update_hrv(fb, user_id):
     dfs = []
     for file in sorted(os.listdir(f"../data/{user_id}/2_preprocessed/hrv")):        
         dfs.append(pd.read_csv(f"../data/{user_id}/2_preprocessed/hrv/{file}", index_col=0))
-    df = pd.concat(dfs)
-    df.to_csv(f"../data/{user_id}/3_processed/3_processed_hrv_{user_id}.csv")
+    if len(dfs) > 0:
+        df = pd.concat(dfs)
+        df.to_csv(f"../data/{user_id}/3_processed/3_processed_hrv_{user_id}.csv")
 
     logger.info(f"End update hrv data of user_id: {user_id}")
 
@@ -331,15 +333,16 @@ def _update_sleep(fb, user_id):
     dfs = []
     for file in sorted(os.listdir(f"../data/{user_id}/2_preprocessed/sleep")):        
         dfs.append(pd.read_csv(f"../data/{user_id}/2_preprocessed/sleep/{file}", index_col=0))
-    df_detail = pd.concat(dfs)
-    df_detail.sort_values("end_datetime", inplace=True)
-    df_detail.reset_index(drop=True, inplace=True)
-    df_detail.to_csv(f"../data/{user_id}/3_processed/3_processed_sleep-detail_{user_id}.csv")
-    
-    df = df_detail.query("log_type == 'auto_detected'").assign(cnt=1)
-    df = df[['date', 'cnt', 'time_in_bed', 'deep', 'light', 'rem', 'wake']].groupby('date').sum()
-    df.sort_index(inplace=True)
-    df.to_csv(f"../data/{user_id}/3_processed/3_processed_sleep_{user_id}.csv")
+    if len(dfs) > 0:
+        df_detail = pd.concat(dfs)
+        df_detail.sort_values("end_datetime", inplace=True)
+        df_detail.reset_index(drop=True, inplace=True)
+        df_detail.to_csv(f"../data/{user_id}/3_processed/3_processed_sleep-detail_{user_id}.csv")
+        
+        df = df_detail.query("log_type == 'auto_detected'").assign(cnt=1)
+        df = df[['date', 'cnt', 'time_in_bed', 'deep', 'light', 'rem', 'wake']].groupby('date').sum()
+        df.sort_index(inplace=True)
+        df.to_csv(f"../data/{user_id}/3_processed/3_processed_sleep_{user_id}.csv")
 
     logger.info(f"End update hrv data of user_id: {user_id}")
 
