@@ -2,6 +2,7 @@ import os
 import sys
 import datetime
 import configparser
+import pickle
 import pandas as pd
 from slacker import Slacker
 import traceback
@@ -49,6 +50,21 @@ class ExFitbit(fitbit.Fitbit):
 
         url = url + '.json'
 
+        return self.make_request(url)
+
+
+    def get_sleep_by_version(self, date, version=1.2):
+        """
+        https://dev.fitbit.com/docs/sleep/#get-sleep-logs
+        date should be a datetime.date object.
+        """
+        url = "{0}/{1}/user/-/sleep/date/{year}-{month}-{day}.json".format(
+            self._get_common_args()[0],
+            version,
+            year=date.year,
+            month=date.month,
+            day=date.day
+        )
         return self.make_request(url)
 
 
@@ -114,6 +130,14 @@ def log_info(func):
     return wrapper
 
 
+def dump_and_load_dict(d, path):
+    
+    with open(path, 'wb') as f:
+        pickle.dump(d, f)
+    with open(path, 'rb') as f:
+        return pickle.load(f)
+    
+
 def get_dates_for_fetch(dir_path, user_id):
 
     files = os.listdir(dir_path)
@@ -177,9 +201,12 @@ def update_token(d_token):
 def create_initial_dirs(user_id):
     
     if not os.path.exists(f"../data/{user_id}"):
-        os.makedirs(f"../data/{user_id}/1_raw/heart-intraday")
-        os.makedirs(f"../data/{user_id}/1_raw/hrv")
-        os.makedirs(f"../data/{user_id}/2_preprocessed")
+
+        TARGETS = ['heart-intraday', 'hrv', 'sleep']
+
+        for t in TARGETS:
+            os.makedirs(f"../data/{user_id}/1_raw/{t}")
+            os.makedirs(f"../data/{user_id}/2_preprocessed/{t}")
         os.makedirs(f"../data/{user_id}/3_processed")
     
         logger.info(f"Initialized dirs of user_id: {user_id}")    
@@ -196,86 +223,123 @@ def get_fitbit_client(access_token, refresh_token):
 def _update_heart_rate(fb, user_id):
     
     logger.info(f"Start update heart-intraday data of user_id: {user_id}")
-    
-    if not os.path.exists(f"../data/{user_id}/2_preprocessed/heart-intraday.csv"):
-        df_present = pd.DataFrame(columns=['datetime','value']).set_index('datetime')
-    else:
-        df_present = pd.read_csv(f"../data/{user_id}/2_preprocessed/heart-intraday.csv", index_col='datetime')
-    
+
     dates = get_dates_for_fetch(f"../data/{user_id}/1_raw/heart-intraday", user_id)
     dfs = []
     for date in dates:
         
         response = fb.intraday_time_series('activities/heart', base_date=date, detail_level='1sec')
+        d = dump_and_load_dict(response, f"../data/{user_id}/1_raw/heart-intraday/1_raw_heart-intraday_{date.replace('-','')}_{user_id}.pkl")
         logger.info(f"Fetched heart-intraday in {date} of user_id: {user_id}")
-        df_raw = pd.DataFrame(response['activities-heart-intraday']['dataset'])
+
+        df_raw = pd.DataFrame(d['activities-heart-intraday']['dataset'])
         if len(df_raw) == 0:
             msg = f"Missing heart-intraday in {date} of user_id: {user_id}"
-            logger.warning(msg)
-            slack_warning(msg)
+            logger.info(msg)
+            slack_msg(msg)
             continue
-        df_raw.to_csv(f"../data/{user_id}/1_raw/heart-intraday/1_raw_heart-intraday_{date.replace('-','')}_{user_id}.csv")
-        
-        df = df_raw
-        df['datetime'] = date + ' ' + df['time']
-        df = df_raw[['datetime','value']].set_index('datetime')
-        dfs.append(df)
-    
-    if len(dfs) > 0:
-        df_add = pd.concat(dfs)
-        df_base = df_present[[d not in dates for d in df_present.index.str[:10]]]
-        df_new = pd.concat([df_base, df_add])
-        
-        df_new.to_csv(f"../data/{user_id}/2_preprocessed/heart-intraday.csv")
-    
-    else:
-        logger.info(f"Nothing to update heart-intraday data of user_id: {user_id}")
+        df_raw['datetime'] = date + ' ' + df_raw['time']
+        df_raw = df_raw[['datetime', 'value']].set_index('datetime')
+        df_raw.to_csv(f"../data/{user_id}/2_preprocessed/heart-intraday/2_preprocessed_heart-intraday_{date.replace('-','')}_{user_id}.csv")
 
-
+    dfs = []
+    for file in sorted(os.listdir(f"../data/{user_id}/2_preprocessed/heart-intraday")):        
+        dfs.append(pd.read_csv(f"../data/{user_id}/2_preprocessed/heart-intraday/{file}", index_col=0))
+    df = pd.concat(dfs)
+    df.to_csv(f"../data/{user_id}/3_processed/3_processed_heart-intraday_{user_id}.csv")
+    
     logger.info(f"End update heart-intraday data of user_id: {user_id}")
 
 
 def _update_hrv(fb, user_id):
     
     logger.info(f"Start update hrv data of user_id: {user_id}")
-    
-    if not os.path.exists(f"../data/{user_id}/2_preprocessed/hrv.csv"):
-        df_present = pd.DataFrame(columns=['datetime','rmssd','coverage','hf','lf']).set_index('datetime')
-    else:
-        df_present = pd.read_csv(f"../data/{user_id}/2_preprocessed/hrv.csv", index_col='datetime')
-    
+
     dates = get_dates_for_fetch(f"../data/{user_id}/1_raw/hrv", user_id)
     dfs = []
     for date in dates:
         
         response = fb.intraday_time_series_all('hrv', base_date=date)
+        d = dump_and_load_dict(response, f"../data/{user_id}/1_raw/hrv/1_raw_hrv_{date.replace('-','')}_{user_id}.pkl")
         logger.info(f"Fetched hrv in {date} of user_id: {user_id}")
         
-        hrv_list = response['hrv']
+        hrv_list = d['hrv']
         if len(hrv_list) == 0:
             msg = f"Missing hrv in {date} of user_id: {user_id}"
-            logger.warning(msg)
-            slack_warning(msg)
+            logger.info(msg)
+            slack_msg(msg)
             continue
-        df_raw = pd.DataFrame(hrv_list[0]['minutes'])
-        df_raw.to_csv(f"../data/{user_id}/1_raw/hrv/1_raw_heart-intraday_{date.replace('-','')}_{user_id}.csv")
         
-        df = pd.DataFrame(df_raw['value'].tolist())
-        df['datetime'] = pd.to_datetime(df_raw['minute'].values)
-        df.set_index('datetime', inplace=True)
-
-        dfs.append(df)
-    
-    if len(dfs) > 0:
-        df_add = pd.concat(dfs)
-        df_base = df_present[[d not in dates for d in df_present.index.str[:10]]]
-        df_new = pd.concat([df_base, df_add])
+        df_raws = []
+        for d_hrv in hrv_list:
+            
+            df_ = pd.DataFrame(d_hrv['minutes'])
+            df_raw = pd.DataFrame(df_['value'].tolist())
+            df_raw['datetime'] = pd.to_datetime(df_['minute'].values)
+            df_raw.set_index('datetime', inplace=True)
+            df_raws.append(df_raw)
+        df_raw = pd.concat(df_raws)
         
-        df_new.to_csv(f"../data/{user_id}/2_preprocessed/hrv.csv")
-    
-    else:
-        logger.info(f"Nothing to update hrv data of user_id: {user_id}")
+        df_raw.to_csv(f"../data/{user_id}/2_preprocessed/hrv/2_preprocessed_hrv_{date.replace('-','')}_{user_id}.csv")
 
+    dfs = []
+    for file in sorted(os.listdir(f"../data/{user_id}/2_preprocessed/hrv")):        
+        dfs.append(pd.read_csv(f"../data/{user_id}/2_preprocessed/hrv/{file}", index_col=0))
+    df = pd.concat(dfs)
+    df.to_csv(f"../data/{user_id}/3_processed/3_processed_hrv_{user_id}.csv")
+
+    logger.info(f"End update hrv data of user_id: {user_id}")
+
+
+def _update_sleep(fb, user_id):
+    
+    logger.info(f"Start update sleep data of user_id: {user_id}")
+    
+    dates = get_dates_for_fetch(f"../data/{user_id}/1_raw/sleep", user_id)
+    dfs = []
+    for date in dates:
+        
+        response = fb.get_sleep_by_version(date=datetime.datetime.strptime(date, '%Y-%m-%d'), version=1.2)
+        d = dump_and_load_dict(response, f"../data/{user_id}/1_raw/sleep/1_raw_sleep_{date.replace('-','')}_{user_id}.pkl")
+        logger.info(f"Fetched sleep in {date} of user_id: {user_id}")
+        
+        sleep_list = d['sleep']
+        if len(sleep_list) == 0:
+            msg = f"Missing sleep in {date} of user_id: {user_id}"
+            logger.info(msg)
+            slack_msg(msg)
+            continue
+        
+        COLS = ['date', 'start_datetime', 'end_datetime', 'log_type', 'type', 'time_in_bed',
+                'deep', 'light', 'rem', 'wake', 'asleep', 'awake', 'restless']
+        df_raw = pd.DataFrame(columns=COLS)
+        for d_sleep in sleep_list[::-1]:
+            
+            sr = pd.Series(data=0, index=COLS, dtype=object)
+            sr['date'] = date
+            sr['start_datetime'] = pd.to_datetime(d_sleep['startTime']).strftime('%Y-%m-%d %H:%M:%S')
+            sr['end_datetime'] = pd.to_datetime(d_sleep['endTime']).strftime('%Y-%m-%d %H:%M:%S')
+            sr['log_type'] = d_sleep['logType']
+            sr['type'] = d_sleep['type']
+            sr['time_in_bed'] = d_sleep['timeInBed']
+            for k, v in d_sleep['levels']['summary'].items():
+                sr[k] = v['minutes']
+            df_raw.loc[len(df_raw)] = sr
+            
+        df_raw.to_csv(f"../data/{user_id}/2_preprocessed/sleep/2_preprocessed_sleep_{date.replace('-','')}_{user_id}.csv")
+        
+    dfs = []
+    for file in sorted(os.listdir(f"../data/{user_id}/2_preprocessed/sleep")):        
+        dfs.append(pd.read_csv(f"../data/{user_id}/2_preprocessed/sleep/{file}", index_col=0))
+    df_detail = pd.concat(dfs)
+    df_detail.sort_values("end_datetime", inplace=True)
+    df_detail.reset_index(drop=True, inplace=True)
+    df_detail.to_csv(f"../data/{user_id}/3_processed/3_processed_sleep-detail_{user_id}.csv")
+    
+    df = df_detail.query("log_type == 'auto_detected'").assign(cnt=1)
+    df = df[['date', 'cnt', 'time_in_bed', 'deep', 'light', 'rem', 'wake']].groupby('date').sum()
+    df.sort_index(inplace=True)
+    df.to_csv(f"../data/{user_id}/3_processed/3_processed_sleep_{user_id}.csv")
 
     logger.info(f"End update hrv data of user_id: {user_id}")
 
@@ -292,7 +356,8 @@ def update_data(user_id, access_token, refresh_token):
     create_initial_dirs(user_id)
     _update_heart_rate(fb, user_id)
     _update_hrv(fb, user_id)
-    
+    _update_sleep(fb, user_id)
+
     logger.info(f"End update data of user_id: {user_id}")
         
 
@@ -320,6 +385,10 @@ if __name__ == '__main__':
 
 # response = fb.intraday_time_series_all('hrv', base_date="2022-07-01")
 # response = fb.intraday_time_series('activities/heart', base_date=date, detail_level='1sec')
+# date = datetime.datetime.today() - datetime.timedelta(days=2)
+# response = fb.get_sleep_by_version(date=date, version=1.2)
+
+
 
 # fb.user_profile_get()
 
