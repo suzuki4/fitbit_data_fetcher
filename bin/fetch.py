@@ -141,7 +141,7 @@ def dump_and_load_dict(d, path):
 def get_dates_for_fetch(dir_path, user_id):
 
     files = os.listdir(dir_path)
-    yyyymmdds = [f.split('_')[-2] for f in files if '.csv' in f]
+    yyyymmdds = [f.split('_')[-2] for f in files if '.pkl' in f]
     
     if len(yyyymmdds) == 0:
         latest_file_date = None
