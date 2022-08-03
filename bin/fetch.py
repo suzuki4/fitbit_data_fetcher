@@ -141,7 +141,7 @@ def dump_and_load_dict(d, path):
 def get_dates_for_fetch(dir_path, user_id):
 
     files = os.listdir(dir_path)
-    yyyymmdds = [f.split('_')[-2] for f in files if '.pkl' in f]
+    yyyymmdds = [f.split('_')[-2] for f in files if '.csv' in f]
     
     if len(yyyymmdds) == 0:
         latest_file_date = None
@@ -224,7 +224,7 @@ def _update_heart_rate(fb, user_id):
     
     logger.info(f"Start update heart-intraday data of user_id: {user_id}")
 
-    dates = get_dates_for_fetch(f"../data/{user_id}/1_raw/heart-intraday", user_id)
+    dates = get_dates_for_fetch(f"../data/{user_id}/2_preprocessed/heart-intraday", user_id)
     dfs = []
     for date in dates:
         
@@ -256,7 +256,7 @@ def _update_hrv(fb, user_id):
     
     logger.info(f"Start update hrv data of user_id: {user_id}")
 
-    dates = get_dates_for_fetch(f"../data/{user_id}/1_raw/hrv", user_id)
+    dates = get_dates_for_fetch(f"../data/{user_id}/2_preprocessed/hrv", user_id)
     dfs = []
     for date in dates:
         
@@ -297,7 +297,7 @@ def _update_sleep(fb, user_id):
     
     logger.info(f"Start update sleep data of user_id: {user_id}")
     
-    dates = get_dates_for_fetch(f"../data/{user_id}/1_raw/sleep", user_id)
+    dates = get_dates_for_fetch(f"../data/{user_id}/2_preprocessed/sleep", user_id)
     dfs = []
     for date in dates:
         
