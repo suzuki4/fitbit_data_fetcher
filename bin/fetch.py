@@ -361,6 +361,8 @@ def update_data(user_id, access_token, refresh_token):
     _update_hrv(fb, user_id)
     _update_sleep(fb, user_id)
 
+    slack_msg(f"Updated data of user_id: {user_id}")
+
     logger.info(f"End update data of user_id: {user_id}")
         
 
