@@ -62,8 +62,8 @@ class ExFitbit(fitbit.Fitbit):
             self._get_common_args()[0],
             version,
             year=date.year,
-            month=date.month,
-            day=date.day
+            month=f"{date.month:02}",
+            day=f"{date.day:02}"
         )
         return self.make_request(url)
 
