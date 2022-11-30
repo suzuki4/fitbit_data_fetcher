@@ -236,7 +236,7 @@ def _update_heart_rate(fb, user_id):
         if len(df_raw) == 0:
             msg = f"Missing heart-intraday in {date} of user_id: {user_id}"
             logger.info(msg)
-            slack_msg(msg)
+            #slack_msg(msg)
             continue
         df_raw['datetime'] = date + ' ' + df_raw['time']
         df_raw = df_raw[['datetime', 'value']].set_index('datetime')
@@ -268,7 +268,7 @@ def _update_hrv(fb, user_id):
         if len(hrv_list) == 0:
             msg = f"Missing hrv in {date} of user_id: {user_id}"
             logger.info(msg)
-            slack_msg(msg)
+            #slack_msg(msg)
             continue
         
         df_raws = []
@@ -309,7 +309,7 @@ def _update_sleep(fb, user_id):
         if len(sleep_list) == 0:
             msg = f"Missing sleep in {date} of user_id: {user_id}"
             logger.info(msg)
-            slack_msg(msg)
+            #slack_msg(msg)
             continue
         
         COLS = ['date', 'start_datetime', 'end_datetime', 'log_type', 'type', 'time_in_bed',
