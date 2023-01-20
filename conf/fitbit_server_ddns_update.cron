@@ -1,0 +1,6 @@
+### Setting ###
+PATH=/usr/bin:$PATH
+ROOT_DIR=/home/ec2-user/git/fitbit_data_fetcher
+LOG_PATH=/home/ec2-user/git/fitbit_data_fetcher/log/cron_server.log
+
+@reboot ec2-user cd $ROOT_DIR/log; wget -O DDNSNow_update.log "https://f5.si/update.php?domain=ユーザ名&password=パスワード" >> $LOG_PATH 2>&1
